@@ -13,8 +13,8 @@ Core and the team must land in the **same environment**; discovery reads
 installed distribution metadata, not paths.
 
 ```
-uv tool install git+https://github.com/azyphon/swarmr-lib \
-  --with git+https://github.com/azyphon/swarmr-k8s-incident \
+uv tool install git+https://github.com/codectl/swarmr \
+  --with git+https://github.com/codectl/swarmr-kube \
   --with-executables-from swarmr-k8s-incident
 ```
 
