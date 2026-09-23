@@ -1,6 +1,6 @@
 [project]
 name = "swarmr"
-version = "1.0.1"
+version = "1.1.0"
 description = "Deep Agents teams of domain specialists, exposed over MCP and a terminal CLI."
 requires-python = ">=3.13"
 # Core only: the shared machinery, the CLI and the MCP server. Teams live in
