@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/codectl/swarmr/compare/v1.2.1...v1.3.0) (2026-10-03)
+
+
+### Features
+
+* declare per call team params as cli flags and mcp tool arguments ([#10](https://github.com/codectl/swarmr/issues/10)) ([684b6fc](https://github.com/codectl/swarmr/commit/684b6fc30b5715ca7a50fefd11b05894c0fb1113))
+
 ## [1.2.1](https://github.com/codectl/swarmr/compare/v1.2.0...v1.2.1) (2026-10-03)
 
 
