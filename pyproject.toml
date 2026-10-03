@@ -2,6 +2,7 @@
 name = "swarmr"
 version = "1.0.1"
 description = "Deep Agents teams of domain specialists, exposed over MCP and a terminal CLI."
+readme = "README.md"
 requires-python = ">=3.13"
 # Core only: the shared machinery, the CLI and the MCP server. Teams live in
 # their own distributions and depend on this one; nothing here depends on a
@@ -19,10 +20,23 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "pyright>=1.1"]
+# Convenience extras for `uv tool install "swarmr[all]"`. Core still imports
+# nothing from a team; these only name the distributions so one install line
+# lands them in the same environment. `all` repeats the rows rather than
+# referencing `swarmr[kube,blame]`: a self-referential extra resolves, but
+# confuses lockers and reads as a cycle.
+kube = ["swarmr-kube>=1.0.1,<2"]
+blame = ["swarmr-blame>=0.1,<1"]
+all = ["swarmr-kube>=1.0.1,<2", "swarmr-blame>=0.1,<1"]
 
 # Teams advertise themselves in the `swarmr.teams` entry-point group; the
 # registry reads that group and nothing else. Core ships no team of its own, so
 # there is deliberately no entry-point table here.
+
+[project.urls]
+Homepage = "https://github.com/codectl/swarmr"
+Source = "https://github.com/codectl/swarmr"
+Issues = "https://github.com/codectl/swarmr/issues"
 
 [project.scripts]
 teams = "swarmr.cli:main"
