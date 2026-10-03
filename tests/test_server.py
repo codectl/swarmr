@@ -20,7 +20,7 @@ from langchain_core.messages import AIMessage
 
 from swarmr.core.events import Event, EventKind
 from swarmr.core.jobs import Job, JobStore
-from swarmr.core.team import Member
+from swarmr.core.team import Member, Param, TeamError
 from swarmr.server import (
     _await_progress,
     _check_task_tool,
@@ -104,6 +104,50 @@ def test_a_start_tool_returns_the_job_id_and_the_roster_before_any_work_lands(
     assert f"stub job {job.id} started." in answer
     assert "network  routing" in answer
     assert settled(job).snapshot()["report"] == REPORT_TEXT
+
+
+class TestDeclaredParams:
+    """A team's `Param`s are arguments of its start tool, in the published schema.
+
+    The server derives the schema from the function signature, so a team with
+    params needs a built signature — a generic `start(request)` would publish a
+    tool the calling model cannot fill in.
+    """
+
+    PARAMS = (Param("repo", "the checkout"), Param("setup", "prep", required=False))
+
+    def test_schema_lists_each_param_with_its_description_and_requiredness(
+        self, store: JobStore, monkeypatch: pytest.MonkeyPatch, stub_team: Any
+    ) -> None:
+        team = stub_team(name="example", params=self.PARAMS)
+        monkeypatch.setattr("swarmr.server.names", lambda: ["example"])
+        monkeypatch.setattr("swarmr.server.get", lambda _name: team)
+
+        tools = asyncio.run(build_server(store).list_tools())
+        schema = next(t for t in tools if t.name == "start_example").input_schema
+
+        assert schema["required"] == ["request", "repo"]
+        assert schema["properties"]["repo"]["description"] == "the checkout"
+        assert schema["properties"]["setup"]["default"] == ""
+
+    def test_the_values_reach_the_build(
+        self, store: JobStore, stub_team: Any, settled: Any
+    ) -> None:
+        team = stub_team(CHUNKS, params=self.PARAMS)
+        _start_tool(team, store)(request="why", repo="/r")
+        job = settled(store.list()[0])
+        assert job.snapshot()["report"] == REPORT_TEXT
+        assert dict(stub_team.runs[0].params) == {"repo": "/r"}
+
+    def test_a_missing_required_param_fails_the_call_and_starts_no_job(
+        self, store: JobStore, stub_team: Any
+    ) -> None:
+        """The caller's mistake belongs in the tool error, not in a job that
+        fails a poll later."""
+        team = stub_team(CHUNKS, params=self.PARAMS)
+        with pytest.raises(TeamError, match="requires repo"):
+            _start_tool(team, store)(request="why")
+        assert store.list() == []
 
 
 def test_an_unknown_job_names_the_jobs_that_do_exist(

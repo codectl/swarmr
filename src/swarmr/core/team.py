@@ -15,9 +15,11 @@ default encodes a domain.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from importlib import import_module
+from keyword import iskeyword
+from types import MappingProxyType
 from typing import Any, Protocol
 
 from swarmr.core.attribution import Attribution
@@ -25,6 +27,7 @@ from swarmr.core.attribution import Attribution
 __all__ = [
     "Lazy",
     "Member",
+    "Param",
     "RunContext",
     "Team",
     "TeamBuild",
@@ -49,6 +52,37 @@ class TeamError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class Param:
+    """One per-call parameter a team needs before it can start.
+
+    Declared on `Team.params`; `core` exposes each as an argument of the MCP
+    start tool and as a `--name` flag on the CLI, and hands the caller's values
+    back in `RunContext.params`. Everything about the target that must not come
+    from the environment belongs here — a repository path, a test command — so
+    one server process can serve callers pointed at different targets.
+
+    Attributes:
+        name: snake_case identifier; the flag and tool-argument name.
+        description: What the calling model and the operator read.
+        required: Whether `Team.context` refuses to start without it.
+    """
+
+    name: str
+    description: str
+    required: bool = True
+
+    def __post_init__(self) -> None:
+        if (
+            not self.name.isidentifier()
+            or iskeyword(self.name)
+            or self.name != self.name.lower()
+        ):
+            raise ValueError(f"param {self.name!r}: name must be a snake_case identifier")
+        if self.name == "request":
+            raise ValueError("param 'request' collides with the request argument")
+
+
+@dataclass(frozen=True, slots=True)
 class RunContext:
     """Per-run state a team must wire into the graph it builds.
 
@@ -57,9 +91,13 @@ class RunContext:
             `AnnounceName` for each subagent. It is per run, not global, so two
             investigations started over MCP cannot overwrite each other's
             attribution — which is exactly what a module-level map did.
+        params: The caller's values for the team's declared `Param`s, already
+            checked by `Team.context` for unknown names and missing required
+            ones. What the values point at is the team's to validate.
     """
 
     attribution: Attribution = field(default_factory=Attribution)
+    params: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +155,10 @@ class Team:
             but a team that supplies it can be pointed at a target and asked
             "what am I looking at" for free — no model, no API key, no graph.
             `build` profiles too; this is the same answer without the cost.
+            Takes the `RunContext`, because a team whose target arrives as
+            params has nothing to profile without them.
+        params: Per-call parameters the team needs before it can start, in the
+            order they are shown. Empty for a team whose target is ambient.
         default_request: What to run when the caller names no task. The team
             owns this: only it knows what a useful default sweep of its own
             target looks like.
@@ -150,7 +192,8 @@ class Team:
     summary: str
     description: str
     build: TeamBuilder
-    profile: Callable[[], str] | None = None
+    profile: Callable[[RunContext], str] | None = None
+    params: tuple[Param, ...] = ()
     default_request: str = ""
     members: tuple[Member, ...] = ()
     prompt_hint: str = ""
@@ -179,12 +222,44 @@ class Team:
             )
         if self.recursion_limit < 1:
             raise ValueError(f"team {self.name!r}: recursion_limit must be positive")
+        names = [p.name for p in self.params]
+        if len(set(names)) != len(names):
+            raise ValueError(f"team {self.name!r}: duplicate param names in {names}")
 
     @property
     def tool_name(self) -> str:
         return f"start_{self.name}"
 
-    def target(self) -> str:
+    def context(self, params: Mapping[str, str] | None = None) -> RunContext:
+        """A fresh `RunContext` holding the caller's checked params.
+
+        Both surfaces go through here, so a run never reaches a team with a
+        name it did not declare or without one it requires. Empty strings
+        count as absent: an unfilled CLI flag and an omitted tool argument
+        must mean the same thing. What a present value points at is the
+        team's to judge, from `build` or `profile`, as a `TeamError`.
+        """
+        given = {k: v for k, v in (params or {}).items() if v.strip()}
+        declared = {p.name for p in self.params}
+        unknown = sorted(set(given) - declared)
+        if unknown:
+            raise TeamError(
+                f"team {self.name!r} takes no parameter {', '.join(unknown)}; "
+                f"declared: {', '.join(sorted(declared)) or 'none'}"
+            )
+        missing = [p.name for p in self.params if p.required and p.name not in given]
+        if missing:
+            raise TeamError(
+                f"team {self.name!r} requires {', '.join(missing)}: "
+                + "; ".join(
+                    f"{p.name} — {p.description}"
+                    for p in self.params
+                    if p.name in missing
+                )
+            )
+        return RunContext(params=MappingProxyType(given))
+
+    def target(self, params: Mapping[str, str] | None = None) -> str:
         """One line describing the live target.
 
         Uses `profile` when the team has one and falls back to building the
@@ -192,9 +267,10 @@ class Team:
         building constructs a model client, so without `profile` merely asking
         what the target is requires a model API key.
         """
+        run = self.context(params)
         if self.profile is not None:
-            return self.profile()
-        return self.build(RunContext()).banner
+            return self.profile(run)
+        return self.build(run).banner
 
     def request_or_default(self, request: str) -> str:
         """The request to run: the caller's, else the team's own default."""
