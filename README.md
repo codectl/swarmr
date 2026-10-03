@@ -13,13 +13,20 @@ Core and the team must land in the **same environment**; discovery reads
 installed distribution metadata, not paths.
 
 ```
-uv tool install git+https://github.com/codectl/swarmr \
-  --with git+https://github.com/codectl/swarmr-kube \
-  --with-executables-from swarmr-k8s-incident
+uv tool install "swarmr[all]" --with-executables-from swarmr-kube
 ```
 
-`--with-executables-from` is easy to miss: without it only core's `teams` and
-`teams-mcp` reach your PATH. Omit it if the team ships no commands.
+`all` pulls in every first-party team; `swarmr[kube]` or `swarmr[blame]` picks
+one. `--with-executables-from` is easy to miss: without it only core's `teams`
+and `teams-mcp` reach your PATH. Name each team package that ships commands
+(`swarmr-kube` ships `incident-credentials`; `swarmr-blame` ships none).
+
+From a checkout instead of PyPI:
+
+```
+uv tool install ../swarmr --with ../swarmr-kube --with ../swarmr-blame \
+  --with-executables-from swarmr-kube
+```
 
 Then a model key, in the directory you run from:
 
