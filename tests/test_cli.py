@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from swarmr import cli
-from swarmr.core.team import TeamError
+from swarmr.core.team import Param, TeamError
 
 
 @dataclass(slots=True)
@@ -24,10 +24,14 @@ class Runs:
 
     requests: list[str] = field(default_factory=list)
     teams: list[str] = field(default_factory=list)
+    params: list[dict[str, str]] = field(default_factory=list)
 
-    def __call__(self, team: Any, request: str, colour: bool = True) -> str:
+    def __call__(
+        self, team: Any, request: str, colour: bool = True, params: Any = None
+    ) -> str:
         self.teams.append(team.name)
         self.requests.append(request)
+        self.params.append(dict(params or {}))
         return "THE REPORT"
 
 
@@ -46,7 +50,7 @@ def registry(monkeypatch: pytest.MonkeyPatch, stub_team: Any) -> dict[str, Any]:
             summary="a stub team",
             prompt_hint="payments returns 502, namespace demo",
             default_request="the default sweep",
-            profile=lambda: "kind-demo, 3 nodes",
+            profile=lambda run: "kind-demo, 3 nodes",
         )
     }
 
@@ -143,6 +147,65 @@ def test_a_team_with_nothing_to_run_says_so_instead_of_inventing_a_task(
     assert runs.requests == []
 
 
+class TestDeclaredParams:
+    """A team's `Param`s are `--flags`, and the prose stays the prose.
+
+    The trap is argparse's: with `request` swallowing every stray word, a flag
+    it was not told about leaves its value in the request. So the flags must be
+    registered before the parse, from the team argv names.
+    """
+
+    PARAMS = (Param("repo", "the checkout"), Param("setup", "prep", required=False))
+
+    @pytest.fixture
+    def param_team(self, registry: dict[str, Any], stub_team: Any) -> Any:
+        registry["stub"] = stub_team(
+            params=self.PARAMS,
+            default_request="the default sweep",
+            profile=lambda run: f"repo {run.params['repo']}",
+        )
+        return registry["stub"]
+
+    def test_flag_values_reach_the_run_and_never_the_request(
+        self, param_team: Any, runs: Runs
+    ) -> None:
+        assert cli.main(["stub", "--repo", "/r", "the", "symptom"]) == 0
+        assert runs.requests == ["the symptom"]
+        assert runs.params == [{"repo": "/r", "setup": ""}]
+
+    def test_flags_may_follow_the_request(self, param_team: Any, runs: Runs) -> None:
+        assert cli.main(["stub", "the", "symptom", "--repo", "/r"]) == 0
+        assert runs.requests == ["the symptom"]
+        assert runs.params[0]["repo"] == "/r"
+
+    def test_target_profiles_with_the_flags(
+        self, param_team: Any, runs: Runs, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert cli.main(["--target", "stub", "--repo", "/r"]) == 0
+        assert capsys.readouterr().out == "repo /r\n"
+        assert runs.requests == []
+
+    def test_a_missing_required_flag_is_one_line_on_stderr(
+        self, param_team: Any, runs: Runs, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert cli.main(["--target", "stub"]) == 2
+        assert "requires repo" in capsys.readouterr().err
+        assert runs.requests == []
+
+    def test_a_flag_the_team_did_not_declare_is_a_usage_error(
+        self, param_team: Any, runs: Runs
+    ) -> None:
+        with pytest.raises(SystemExit):
+            cli.main(["stub", "--rpeo", "/r"])
+        assert runs.requests == []
+
+    def test_list_shows_the_flags(
+        self, param_team: Any, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert cli.main(["--list"]) == 0
+        assert "  params: --repo <repo> [--setup <setup>]" in capsys.readouterr().out
+
+
 class TestEnvironmentFailures:
     """A team failing on its environment is news, not a crash.
 
@@ -159,7 +222,7 @@ class TestEnvironmentFailures:
         stub_team: Any,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        def refuse() -> str:
+        def refuse(run: Any) -> str:
             raise TeamError("credential expired 3h ago. Run `mint --now`.")
 
         registry["stub"] = stub_team(profile=refuse)
@@ -191,7 +254,7 @@ class TestEnvironmentFailures:
     ) -> None:
         """Swallowing a bug would turn it into a mystery."""
 
-        def crash() -> str:
+        def crash(run: Any) -> str:
             raise KeyError("nodes")
 
         registry["stub"] = stub_team(profile=crash)

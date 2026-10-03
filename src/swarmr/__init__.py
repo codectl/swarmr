@@ -24,6 +24,7 @@ from importlib.metadata import version
 from swarmr.core.team import (
     Lazy,
     Member,
+    Param,
     RunContext,
     Team,
     TeamBuild,
@@ -33,6 +34,7 @@ from swarmr.core.team import (
 __all__ = [
     "Lazy",
     "Member",
+    "Param",
     "RunContext",
     "Team",
     "TeamBuild",

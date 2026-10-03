@@ -14,11 +14,13 @@ of staring at an opaque "running".
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import MCPServer
+from pydantic import Field
 
 from swarmr.core.jobs import Job, JobState, JobStore
 from swarmr.core.report import (
@@ -41,7 +43,9 @@ _POLL_SLICE_SECONDS = 0.5
 _JOBS = JobStore()
 
 
-def _work(team: Team, request: str) -> Callable[[Job], tuple[str, str]]:
+def _work(
+    team: Team, request: str, params: Mapping[str, str]
+) -> Callable[[Job], tuple[str, str]]:
     """Bind a team run to a job so progress lands on the job as it happens."""
 
     def job_work(job: Job) -> tuple[str, str]:
@@ -53,6 +57,7 @@ def _work(team: Team, request: str) -> Callable[[Job], tuple[str, str]]:
                 observe=job.record,
                 on_target=job.set_target,
                 usage=tracker,
+                params=params,
             )
         finally:
             # Published even on failure: a run that burned tokens and then blew
@@ -85,13 +90,22 @@ def _start_tool(team: Team, store: JobStore) -> Any:
     A named tool per team, rather than one generic `run(team, task)`, because the
     calling model routes on tool descriptions. Collapsing them forces it to
     guess.
+
+    The team's declared params become arguments of the tool. The server derives
+    the input schema from the function signature, so the signature is built
+    rather than written: `request`, then one keyword argument per `Param`,
+    optional ones defaulting to empty.
     """
 
-    def start(request: str) -> str:
+    def start(request: str, **params: str) -> str:
+        # Checked here, before a job exists: a missing required param is the
+        # caller's mistake and belongs in the tool error, not in a job that
+        # fails a poll later. The run gets the checked mapping, never the raw one.
+        context = team.context(params)
         job = store.start(
             team.name,
             request,
-            _work(team, request),
+            _work(team, request, context.params),
             orchestrator=team.orchestrator,
             digest=team.digest,
         )
@@ -107,17 +121,36 @@ def _start_tool(team: Team, store: JobStore) -> Any:
             "a shell between polls, and never start a second run for this incident."
         )
 
+    request_param = inspect.Parameter(
+        "request",
+        inspect.Parameter.KEYWORD_ONLY,
+        annotation=Annotated[
+            str,
+            Field(
+                description="The symptom or task, in prose. Include what you know "
+                f'about where and when it started. Example: "{team.prompt_hint}"'
+            ),
+        ],
+    )
+    declared = [
+        inspect.Parameter(
+            p.name,
+            inspect.Parameter.KEYWORD_ONLY,
+            annotation=Annotated[str, Field(description=p.description)],
+            default=inspect.Parameter.empty if p.required else "",
+        )
+        for p in team.params
+    ]
+    start.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        [request_param, *declared], return_annotation=str
+    )
     start.__name__ = team.tool_name
     start.__doc__ = (
         f"{team.description}\n\n"
         "Starts the investigation in the background and returns a job id "
         "immediately. Poll check_task with that id to follow the delegation trail "
         "and collect the report. Do not start a second run while one is still "
-        "running.\n\n"
-        "Args:\n"
-        "    request: The symptom or task, in prose. Include the namespace, "
-        "workload or resource if you know it, plus when it started. "
-        f'Example: "{team.prompt_hint}"'
+        "running."
     )
     return start
 

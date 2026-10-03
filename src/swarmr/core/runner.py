@@ -11,13 +11,13 @@ entry, so a second run silently wiped the first one's names.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 from swarmr.core.events import Event, EventKind, EventReader
 from swarmr.core.render import Renderer
 from swarmr.core.report import format_usage
-from swarmr.core.team import RunContext, Team
+from swarmr.core.team import Team
 from swarmr.core.text import content_text
 from swarmr.core.usage import UsageTracker
 
@@ -33,6 +33,7 @@ def run(
     observe: Observer | None = None,
     on_target: TargetHook | None = None,
     usage: UsageTracker | None = None,
+    params: Mapping[str, str] | None = None,
 ) -> tuple[str, str]:
     """Run the team once. Returns (report, banner).
 
@@ -47,8 +48,10 @@ def run(
         usage: Token accountant. Pass one to get exact per-agent counts;
             it is filled in as the run proceeds, so a caller may read it while
             the run is still going.
+        params: The caller's values for the team's declared `Param`s. Checked
+            by `Team.context` before anything is built.
     """
-    context = RunContext()
+    context = team.context(params)
     build = team.build(context)
     if on_target is not None:
         on_target(build.banner)
@@ -67,11 +70,6 @@ def run(
     if usage is not None:
         config["callbacks"] = [usage]
 
-    # "values" alongside "updates": updates drive the live trail, values carry
-    # the authoritative message list. Reconstructing the report from update
-    # events alone is fragile — a compaction step or a non-string content block
-    # can leave an early narration as the last text seen, which is how a run
-    # once reported its plan instead of its findings.
     for chunk in build.graph.stream(
         {"messages": [{"role": "user", "content": request}]},
         config,
@@ -93,8 +91,6 @@ def run(
             elif event.kind is EventKind.REPORT:
                 streamed_report = event.text
 
-    # A filed report wins: the team files it deliberately, whereas closing prose
-    # is optional and has been observed missing on converged runs.
     report = (
         filed_report
         or _structured_report(final_state)
@@ -141,7 +137,9 @@ def _final_report(state: dict[str, Any] | None) -> str:
     return ""
 
 
-def run_streamed(team: Team, request: str, colour: bool = True) -> str:
+def run_streamed(
+    team: Team, request: str, colour: bool = True, params: Mapping[str, str] | None = None
+) -> str:
     """Run with live terminal output. Returns the final report."""
     renderer = Renderer(
         colour=colour,
@@ -158,6 +156,7 @@ def run_streamed(team: Team, request: str, colour: bool = True) -> str:
         observe=renderer.show,
         on_target=lambda banner: renderer.field("target", banner),
         usage=tracker,
+        params=params,
     )
     renderer.note(format_usage(tracker.snapshot()))
     return report

@@ -20,9 +20,12 @@ teams --list                  # what is installed
 teams --target <team>         # profile the target, then exit (no model needed)
 teams <team> "the symptom, as prose"
 teams <team>                  # the team's own default_request
+teams <team> --repo P --test C "…"   # a team's declared params, as flags
 ```
 
 `--no-colour` disables ANSI; colour is on only when stdout is a tty. `--target` goes through `Team.target()`, which prefers the team's `profile` — building the graph would construct a model client and so require an API key just to ask what the target is.
+
+A team's `params` become `--<name>` flags. The parser is built *after* the team name is read off argv, because `request` takes every stray word: a flag argparse was not told about (`--repo X`) would leave `X` in the request. `--list` shows each team's flags; a missing required one is a `TeamError` from `Team.context`, the same sentence the MCP surface gives.
 
 Exit codes: `0` ok, `2` unknown team / `TeamError` / no request and no default. `TeamError` prints one sentence on stderr; anything else keeps its traceback, because anything else is a bug.
 
@@ -141,11 +144,15 @@ A `TeamError` from a run becomes the job's failure reason verbatim; any other ex
 
 ## Key Interfaces
 
-**`Team`** (frozen dataclass, `core/team.py`) — the whole ABI. Required: `name`, `summary`, `description`, `build`. Optional: `profile`, `default_request`, `members`, `prompt_hint`, `report_tool`, `render_report`, `orchestrator`, `audit_agents`, `digest`, `is_error`, `recursion_limit` (160). `name` forms the MCP tool name via `tool_name`, so renaming it breaks callers. `__post_init__` rejects `report_tool` without `render_report` or vice versa — half of that pair fails silently — and a non-positive `recursion_limit`.
+**`Team`** (frozen dataclass, `core/team.py`) — the whole ABI. Required: `name`, `summary`, `description`, `build`. Optional: `profile`, `params`, `default_request`, `members`, `prompt_hint`, `report_tool`, `render_report`, `orchestrator`, `audit_agents`, `digest`, `is_error`, `recursion_limit` (160). `name` forms the MCP tool name via `tool_name`, so renaming it breaks callers. `__post_init__` rejects `report_tool` without `render_report` or vice versa — half of that pair fails silently — a non-positive `recursion_limit`, and duplicate param names.
 
-**`TeamBuilder`** — `(run: RunContext) -> TeamBuild`. Called once per run, never cached, so profiling reflects the target's current state rather than whatever was true at import time.
+**`Param`** — `(name, description, required=True)`. Declared on `Team.params` for everything about the target that must not come from the environment: a repository path, a test command. Each is an argument of the MCP start tool (the server builds the tool's signature from them, so the published schema carries name, description and requiredness) and a `--name` flag on the CLI. `name` must be a snake_case identifier and not `request`.
 
-**`RunContext`** — carries the run's `Attribution`. Per run, never global: attribution used to be module state cleared on entry, so a second MCP run starting mid-flight wiped the first one's names.
+**`Team.context(params)`** — the one gate both surfaces pass through: rejects names the team did not declare, requires the required ones, treats blank values as absent (an unfilled flag and an omitted argument must mean the same thing), and returns a fresh `RunContext`. What a value points at is the team's to validate, from `build` or `profile`, as a `TeamError`. The server calls it before a job exists so a missing argument is a tool error, not a job that fails a poll later.
+
+**`TeamBuilder`** — `(run: RunContext) -> TeamBuild`. Called once per run, never cached, so profiling reflects the target's current state rather than whatever was true at import time. `profile` has the same signature: a team whose target arrives as params has nothing to profile without them.
+
+**`RunContext`** — carries the run's `Attribution` and `params` (a read-only mapping of the checked values). Per run, never global: attribution used to be module state cleared on entry, so a second MCP run starting mid-flight wiped the first one's names.
 
 **`Observer`** — `Callable[[Event], None]`.
 
@@ -161,6 +168,7 @@ Each field exists because `core` would otherwise have to assume a domain:
 - `is_error` — without it, nothing is ever marked failed; failure looks different in every domain.
 - `report_tool` + `render_report` — without them, the deliverable falls back to whichever prose arrived last.
 - `default_request` — without it, a bare `teams <team>` has nothing to run.
+- `params` — without them, a team's target can only come from the environment, and one server process can serve only one target.
 - `recursion_limit` — without it, six specialists and twelve share one ceiling.
 
 A default is supplied for each so declaring a team stays short, but no default encodes a domain.
@@ -169,7 +177,7 @@ A default is supplied for each so declaring a team stays short, but no default e
 
 ```
 [project]
-dependencies = ["swarmr>=1.0,<2", "whatever-sdk>=1"]
+dependencies = ["swarmr>=1.3,<2", "whatever-sdk>=1"]
 
 [project.entry-points."swarmr.teams"]
 my_team = "my_package:TEAM"
@@ -190,7 +198,7 @@ TEAM = Team(
 
 That is the whole coupling. Both surfaces iterate discovery, so the team gets a `start_my_team` tool and a CLI command with no further edits, and `pip uninstall` unregisters it. The one rule: anything importing an agent framework, model SDK or domain client goes behind `Lazy`.
 
-Teams pin `swarmr>=1.0,<2` — a version rather than a git URL, so moving core to an index later changes nothing in the team.
+Teams pin `swarmr>=1.3,<2` — `1.3` introduced `Param` and the `profile(run)` signature. Core's `kube`, `blame` and `all` extras pin the first-party teams the other way, so `swarmr[all]` never pairs a core with a team built against an older contract.
 
 ## Design Patterns
 
