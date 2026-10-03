@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/codectl/swarmr/compare/v1.2.0...v1.2.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* accept swarmr-blame 1.x in the blame and all extras ([e0af2bf](https://github.com/codectl/swarmr/commit/e0af2bf967e69ea6847a235f7e182000c859f6c4))
+
 ## [1.2.0](https://github.com/codectl/swarmr/compare/v1.1.0...v1.2.0) (2026-10-03)
 
 
