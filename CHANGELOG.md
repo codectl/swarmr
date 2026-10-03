@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/codectl/swarmr/compare/v1.1.0...v1.2.0) (2026-10-03)
+
+
+### Features
+
+* add publish workflow ([#7](https://github.com/codectl/swarmr/issues/7)) ([be8980f](https://github.com/codectl/swarmr/commit/be8980f765990a48be1c1176b4603453180d1f32))
+
 ## [1.1.0](https://github.com/codectl/swarmr/compare/v1.0.1...v1.1.0) (2026-09-23)
 
 
