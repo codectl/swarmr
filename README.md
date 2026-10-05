@@ -1,6 +1,6 @@
 # swarmr
 
-Teams of [Deep Agents](https://github.com/langchain-ai/deepagents) domain
+Teams of deep agents domain
 specialists, exposed two ways: a streaming terminal CLI and an MCP server.
 
 This is the core distribution. It ships **no team**. Teams live in their own
@@ -73,4 +73,10 @@ have not seen.
 Install a team, restart the server, and its tool appears. No configuration
 changes.
 
-Design notes and internals: [CLAUDE.md](CLAUDE.md).
+## References
+
+- [Architecture overview](./CLAUDE.md)
+- [Concept](./concept.png)
+- [Langchain deepagents](https://github.com/langchain-ai/deepagents)
+- [Langchain docs](https://docs.langchain.com/oss/python/deepagents/overview)
+- [Langchain api reference](https://reference.langchain.com/python/deepagents)
