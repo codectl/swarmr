@@ -47,12 +47,16 @@ class AgentUsage:
         return self.input_tokens + self.output_tokens
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, eq=False)
 class UsageTracker(BaseCallbackHandler):
     """Aggregates token usage per subagent.
 
     Thread-safe because subagents run concurrently on their own threads inside
     one graph.
+
+    `eq=False` keeps identity hashing: langchain merges callback handlers into
+    a `set` when the summarization middleware invokes the summary model, and a
+    dataclass with the generated `__eq__` is unhashable there.
     """
 
     # Label for the root agent, whose model calls carry no lc_agent_name. The
