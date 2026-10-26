@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/codectl/swarmr/compare/v1.3.0...v1.3.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* make UsageTracker hashable for summarization callback merging ([#12](https://github.com/codectl/swarmr/issues/12)) ([021cace](https://github.com/codectl/swarmr/commit/021cace6196a9b2a41dd72884320587ffe8f5785))
+
 ## [1.3.0](https://github.com/codectl/swarmr/compare/v1.2.1...v1.3.0) (2026-10-03)
 
 
