@@ -94,8 +94,11 @@ class EventReader:
         render_report: Any = None,
         request: str = "",
         attribution: Attribution | None = None,
+        briefed_agents: tuple[str, ...] = (),
     ) -> None:
         self.audit_agents = audit_agents
+        # Everyone whose first briefing the middleware passes through untouched.
+        self._exempt = audit_agents + briefed_agents
         # The run's tag -> subagent map, shared with the middleware that fills
         # it. Owned by the run, so two concurrent runs never see each other's
         # names; a reader built without one simply shows raw stream tags.
@@ -161,7 +164,7 @@ class EventReader:
             self._dispatched[call_id] = who
             authored = args.get(DESCRIPTION_KEY) or args.get(PROMPT_KEY, "")
             normalised = effective_briefing(
-                self.request, who, self.audit_agents, self._briefed
+                self.request, who, self._exempt, self._briefed
             )
             self._briefed.add(who)
             summary = normalised if normalised is not None else authored
