@@ -58,6 +58,7 @@ def run(
 
     reader = EventReader(
         audit_agents=team.audit_agents,
+        briefed_agents=team.briefed_agents,
         report_tool=team.report_tool,
         render_report=team.render_report,
         request=request,

@@ -176,6 +176,10 @@ class Team:
             rather than a symptom — an adjudicator, a reviewer. Their briefings
             are echoed verbatim so the adjudication can be audited, and are
             never replaced by the first-round briefing rule.
+        briefed_agents: Members the team's own middleware exempts from the
+            first-round briefing rule without their being adjudicators — a
+            worker that needs the orchestrator's slot, not the caller's request.
+            Display only: their first dispatch is shown as authored.
         digest: Summarises one of this team's tool results in a line. Only the
             team knows what its payloads mean; without it `core` reports shape
             alone.
@@ -202,6 +206,7 @@ class Team:
     # Vocabulary. `core` renders and records; it never assumes a role exists.
     orchestrator: str = "orchestrator"
     audit_agents: tuple[str, ...] = ()
+    briefed_agents: tuple[str, ...] = ()
     digest: Callable[[str], str] | None = None
     is_error: Callable[[str], bool] | None = None
     recursion_limit: int = 160
