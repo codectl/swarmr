@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/codectl/swarmr/compare/v1.3.1...v1.4.0) (2026-11-12)
+
+
+### Features
+
+* add briefed_agents so a first dispatch is displayed as the briefing the subagent receives ([#14](https://github.com/codectl/swarmr/issues/14)) ([6e75864](https://github.com/codectl/swarmr/commit/6e7586443460f98b7099c66b28528dfd44175806))
+
 ## [1.3.1](https://github.com/codectl/swarmr/compare/v1.3.0...v1.3.1) (2026-10-26)
 
 
