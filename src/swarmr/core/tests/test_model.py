@@ -2,8 +2,8 @@
 
 `load_env` writes into `os.environ`, so every test here restores the process
 environment itself — `monkeypatch` only reverts changes it made, not the ones
-made by the code under test. `build_model` is deliberately untested: it needs a
-real key and constructs a network client.
+made by the code under test. `build_model` is tested only as far as choosing
+the provider's client, which constructs without a network call.
 """
 
 from __future__ import annotations
@@ -14,14 +14,18 @@ from pathlib import Path
 
 import pytest
 
-from swarmr.core.model import load_env
+from swarmr.core.model import build_model, load_env
 
 
 @pytest.fixture(autouse=True)
 def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """A cwd with no .env above it, an empty home, and no KIMI_* already set."""
+    """A cwd with no .env above it, an empty home, and no model settings set."""
     saved = dict(os.environ)
-    for key in [key for key in os.environ if key.startswith("KIMI_")]:
+    for key in [
+        key
+        for key in os.environ
+        if key.startswith(("KIMI_", "SWARMR_")) or key.endswith("_API_KEY")
+    ]:
         del os.environ[key]
     home = tmp_path / "home"
     home.mkdir()
@@ -146,3 +150,31 @@ def test_no_file_anywhere_leaves_the_environment_untouched(isolated_env: Path) -
     load_env()
 
     assert not [key for key in os.environ if key.startswith("KIMI_")]
+
+
+def test_a_file_can_name_any_provider_and_carry_its_key(isolated_env: Path) -> None:
+    """`SWARMR_MODEL` and the provider's own key variable come from the same
+    .env; a line that is neither a setting nor a key never reaches the process."""
+    (isolated_env / ".env").write_text(
+        "SWARMR_MODEL=anthropic:some-model\nANTHROPIC_API_KEY=k\nDATABASE_URL=x\n"
+    )
+
+    model = build_model()
+
+    assert type(model).__name__ == "ChatAnthropic"
+    assert "DATABASE_URL" not in os.environ
+
+
+def test_without_a_named_provider_the_model_is_kimi(isolated_env: Path) -> None:
+    (isolated_env / ".env").write_text("KIMI_API_KEY=k\n")
+
+    assert type(build_model()).__name__ == "ChatOpenAI"
+
+
+def test_a_model_without_a_provider_is_refused_with_the_format(
+    isolated_env: Path,
+) -> None:
+    os.environ["SWARMR_MODEL"] = "some-model"
+
+    with pytest.raises(RuntimeError, match="<provider>:<model>"):
+        build_model()
