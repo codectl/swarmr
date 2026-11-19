@@ -28,14 +28,18 @@ uv tool install ../swarmr --with ../swarmr-kube --with ../swarmr-blame \
   --with-executables-from swarmr-kube
 ```
 
-Then a model key, in the directory you run from:
+Then a model, in the directory you run from. Any provider LangChain knows, as
+`<provider>:<model>` plus that provider's own key variable:
 
 ```
-printf 'KIMI_API_KEY=sk-…\n' > .env && chmod 600 .env
+printf 'SWARMR_MODEL=anthropic:<model id>\nANTHROPIC_API_KEY=sk-ant-…\n' > .env && chmod 600 .env
 ```
 
-Loading walks up from the current directory, then falls back to `~/.env`;
-`KIMI_ENV_FILE` overrides both.
+Without `SWARMR_MODEL` the model is Kimi's coding plan and `KIMI_API_KEY` is
+all it needs. Loading walks up from the current directory, then falls back to
+`~/.env`; `SWARMR_ENV_FILE` overrides both. A provider other than Anthropic or
+OpenAI needs its LangChain package in the same environment
+(`--with langchain-<provider>`).
 
 ## CLI
 
