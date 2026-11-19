@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/codectl/swarmr/compare/v1.4.0...v1.5.0) (2026-11-19)
+
+
+### Features
+
+* add ability to select the provider model with SWARMR_MODEL ([#16](https://github.com/codectl/swarmr/issues/16)) ([ad1a478](https://github.com/codectl/swarmr/commit/ad1a47848af08dcc4c4f24e17dc195298a5ff9b2))
+
 ## [1.4.0](https://github.com/codectl/swarmr/compare/v1.3.1...v1.4.0) (2026-11-12)
 
 
